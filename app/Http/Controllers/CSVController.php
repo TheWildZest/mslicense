@@ -14,9 +14,9 @@ class CSVController extends Controller
      */
     protected $hiddenColumns = [
         'Reseller',
-        'CustomerName',
         'chargedDays'
     ];
+
 
     public function data(Request $request){
         $euroExchangeRate = $request->euroExchangeRate;
@@ -50,8 +50,8 @@ class CSVController extends Controller
         foreach($data as $key => $row){
             if($key > 1){
                 //calculate charged days from start-end dates
-                $startDate = Carbon::createFromFormat('Y.m.d', $row['ChargeStartDate']);
-                $endDate = Carbon::createFromFormat('Y.m.d', $row['ChargeEndDate']);
+                $startDate = Carbon::createFromFormat('Y/m/d', $row['ChargeStartDate']);
+                $endDate = Carbon::createFromFormat('Y/m/d', $row['ChargeEndDate']);
                 $data[$key]['chargedDays'] = $startDate->diffInDays($endDate) + 1;
 
                 //Select the price for the current row from the unitPrices array based on the product's name
