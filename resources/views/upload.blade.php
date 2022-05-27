@@ -1,4 +1,4 @@
-<form action="{{ route('processCSV') }}" method="POST" enctype="multipart/form-data">
+<form action="{{ route('data') }}" method="POST" enctype="multipart/form-data">
     @csrf
 
     <div>
@@ -30,6 +30,14 @@
         <label for="EO">Exchange Online</label>
         <input type="number" name="EO" step="0.1" value="3">
     </div>
+
+    <!--div>
+        <label for="chargeType">Számlázás módja</label>
+        <select name="chargeType">
+            <option value="Cycle fee">Cycle fee</option>
+            <option value="Cycle instance prora" selected>Cycle instance prora</option>
+        </select>
+    </div-->
 
     <div>
         <input type="file" name="file">

@@ -7,51 +7,91 @@ use Illuminate\Http\Request;
 
 class CSVController extends Controller
 {
-    public function processCSV(Request $request){
+    /**
+     * The columns that should be hidden for view.
+     *
+     * @var array<int, string>
+     */
+    protected $hiddenColumns = [
+        'Reseller',
+        'CustomerName',
+        'chargedDays'
+    ];
+
+    public function data(Request $request){
         $euroExchangeRate = $request->euroExchangeRate;
 
         //Calculate billingDays from billingStart and billingEnd date
         $billingDays = Carbon::createFromFormat('Y-m-d', $request->billingStartDate)
-            ->diffInDays(Carbon::createFromFormat('Y-m-d', $request->billingEndDate));
-
-        //If the given billing range is less than 1, set it to 1
-        ($billingDays < 1) ? $billingDays = 1 : null;
+            ->diffInDays(Carbon::createFromFormat('Y-m-d', $request->billingEndDate)) + 1;
 
         //Calculate the daily price of the Ms product in EUR (the price is calculated with the given billing range)
         $unitPrices = array();
 
-        $unitPrices['Microsoft 365 Business Basic'] = $request->MBB / $billingDays;
-        $unitPrices['Microsoft 365 Business Standard'] = $request->MBS / $billingDays;
-        $unitPrices['Exchange Online (Plan 1)'] = $request->EO / $billingDays;
-
+        //Set unitPrices and originalPrices (from input)
+        $unitPrices['Microsoft 365 Business Basic'] = [
+            'orig_price' => $request->MBB,
+            'u_price' => $request->MBB / $billingDays
+        ];
+        $unitPrices['Microsoft 365 Business Standard'] = [
+            'orig_price' => $request->MBS,
+            'u_price' => $request->MBS / $billingDays
+        ];
+        $unitPrices['Exchange Online (Plan 1)'] = [
+            'orig_price' => $request->EO,
+            'u_price' => $request->EO / $billingDays
+        ];
 
         //Get data from the uploaded CSV file
         $csvRaw = $request->file('file');
         $data = $this->getCSVData($csvRaw);
 
-        //Process data, except the first row (header)
+        //Process data, except the first row (header) and filter by ChargeType
         foreach($data as $key => $row){
             if($key > 1){
                 //calculate charged days from start-end dates
                 $startDate = Carbon::createFromFormat('Y.m.d', $row['ChargeStartDate']);
                 $endDate = Carbon::createFromFormat('Y.m.d', $row['ChargeEndDate']);
-                $data[$key]['chargedDays'] = $startDate->diffInDays($endDate);
+                $data[$key]['chargedDays'] = $startDate->diffInDays($endDate) + 1;
 
-                $price = 0;
-                foreach($unitPrices as $productName => $unitPrice){
-                    if($productName == $row['SkuName']){
-                        $price = $unitPrice;
+                //Select the price for the current row from the unitPrices array based on the product's name
+                $priceArray = 0;
+                foreach($unitPrices as $priceKey => $unitPrice){
+                    if($priceKey == $row['SkuName']){
+                        $priceArray = $unitPrice;
                         break;
                     }
                 }
 
-                $data[$key]['total'] = $data[$key]['chargedDays'] * $row['Quantity_'] * $price;
+                //calculate total from chargedDays, qunatity and unitPrice for subscription base billing
+                if($row['ChargeType'] == 'Cycle instance prora'){
+                    $data[$key]['total'] = $data[$key]['chargedDays'] * $row['Quantity_'] * $priceArray['u_price'];
+                }else{//... and for any other billing type
+                    $data[$key]['total'] = $row['Quantity_'] * $priceArray['orig_price'];
+                }
 
+
+
+                //Push 'new' field names to the header row if they are not there yet
+                if (!in_array('chargedDays', $data[1])){
+                    array_push($data[1], 'chargedDays');
+                }
+                if (!in_array('total', $data[1])){
+                    array_push($data[1], 'total');
+                }
             }
         }
 
-        dd($data);
+        //Calculate ms_total and own_total
+        $totals = $this->calculateTotals($data);
+
+        //Modify data array for view
+        $dataForView = $this->modifyForView($data);
+
+
+        return view('data', ['data' => $dataForView, 'totals' => $totals, 'euroExchangeRate' => $euroExchangeRate]);
     }
+
 
     /**
      * Convert csv file into an array, which contains the data as: $row => array ($dataFieldName => $data)
@@ -81,5 +121,50 @@ class CSVController extends Controller
         }
 
         return $csvData;
+    }
+
+
+    /**
+     * Modify data array for view
+     *
+     * @return array
+     */
+    public function modifyForView($data){
+        //Hide columns that are in the $hiddenColumns array
+        foreach($data as $key => $row){
+            //Remove column header
+            if($key <= 1){
+                foreach($this->hiddenColumns as $hiddenName){
+                    $keyToRemove = array_search($hiddenName, $data[1]);
+                    unset($data[1][$keyToRemove]);
+                }
+            }else{ // remove the values from each row
+                foreach($this->hiddenColumns as $hiddenName){
+                    unset($data[$key][$hiddenName]);
+                }
+            }
+        }
+
+        return $data;
+    }
+
+
+    /**
+     * Modify data array for view
+     *
+     * @return array
+     */
+    public function calculateTotals($data){
+        $totals['ms_total'] = 0;
+        $totals['own_total'] = 0;
+
+        foreach($data as $key => $row){
+            if($key > 1){
+                $totals['ms_total'] += $row['Total_'];
+                $totals['own_total'] += $row['total'];
+            }
+        }
+
+        return $totals;
     }
 }
