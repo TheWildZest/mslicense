@@ -82,12 +82,11 @@ class CSVController extends Controller
             }
         }
 
-        //Calculate ms_total and own_total
+        //Calculate ms_total, own_total and sub_totals
         $totals = $this->calculateTotals($data);
 
         //Modify data array for view
         $dataForView = $this->modifyForView($data);
-
 
         return view('data', ['data' => $dataForView, 'totals' => $totals, 'euroExchangeRate' => $euroExchangeRate]);
     }
@@ -157,11 +156,19 @@ class CSVController extends Controller
     public function calculateTotals($data){
         $totals['ms_total'] = 0;
         $totals['own_total'] = 0;
+        $totals['CIP_total'] = 0;
+        $totals['CF_total'] = 0;
 
         foreach($data as $key => $row){
             if($key > 1){
                 $totals['ms_total'] += $row['Total_'];
                 $totals['own_total'] += $row['total'];
+
+                if($row['ChargeType'] == "Cycle instance prora"){
+                    $totals['CIP_total'] += $row['total'];
+                }else{
+                    $totals['CF_total'] += $row['total'];
+                }
             }
         }
 
