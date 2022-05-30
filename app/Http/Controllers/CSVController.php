@@ -13,8 +13,11 @@ class CSVController extends Controller
      * @var array<int, string>
      */
     protected $hiddenColumns = [
+        'POnumber',
         'Reseller',
-        'chargedDays'
+        'chargedDays',
+        'Unit_Price',
+        'Total_'
     ];
 
 
@@ -50,8 +53,8 @@ class CSVController extends Controller
         foreach($data as $key => $row){
             if($key > 1){
                 //calculate charged days from start-end dates
-                $startDate = Carbon::createFromFormat('Y/m/d', $row['ChargeStartDate']);
-                $endDate = Carbon::createFromFormat('Y/m/d', $row['ChargeEndDate']);
+                $startDate = Carbon::createFromFormat('Y.m.d', $row['ChargeStartDate']);
+                $endDate = Carbon::createFromFormat('Y.m.d', $row['ChargeEndDate']);
                 $data[$key]['chargedDays'] = $startDate->diffInDays($endDate) + 1;
 
                 //Select the price for the current row from the unitPrices array based on the product's name
@@ -68,6 +71,8 @@ class CSVController extends Controller
                     $data[$key]['total'] = $data[$key]['chargedDays'] * $row['Quantity_'] * $priceArray['u_price'];
                 }else{//... and for any other billing type
                     $data[$key]['total'] = $row['Quantity_'] * $priceArray['orig_price'];
+                    $data[$key]['own_unit_price'] = $priceArray['orig_price'];
+                    $data[$key]['own_unit_price_HUF'] = round($priceArray['orig_price'] * $euroExchangeRate, 0) . " HUF";
                 }
 
 
@@ -78,6 +83,12 @@ class CSVController extends Controller
                 }
                 if (!in_array('total', $data[1])){
                     array_push($data[1], 'total');
+                }
+                if (!in_array('own_unit_price', $data[1])){
+                    array_push($data[1], 'own_unit_price');
+                }
+                if (!in_array('own_unit_price_HUF', $data[1])){
+                    array_push($data[1], 'own_unit_price_HUF');
                 }
             }
         }
@@ -149,7 +160,7 @@ class CSVController extends Controller
 
 
     /**
-     * Modify data array for view
+     * Calculating total prices
      *
      * @return array
      */
